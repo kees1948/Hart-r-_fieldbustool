@@ -1,0 +1,58 @@
+
+During the development of a Hart field devices I soon felt the need for a tool
+that could mimic a Hart master. Of course there are various types of communicators around
+but most are expensive and did not meet my requirements.  
+
+* 	It should be capable of repeating a command undefinitely or break the repeat at 
+	a transmission error. 
+*	It should be relatively easy to add (new) commands 
+
+*	It should adhere the Hart bustiming requirements as accurate as possible
+
+* 	Preferably it should work with burst mode devices
+
+*	It should run in a console or in a xterm window (makes it easy to use it from 
+	distance) (26x80)
+
+*	It should use a database where the definition of request- and response frames
+	is kept. This way it is easy to maintain many different devices.
+
+*	It should be able to run as primary- or secundary master
+
+*	It should be able to show burstmode frames
+
+*	It should run on Linux
+
+The tool which I came up with is the result of an evolutionay process and I believe is
+still far from perfect but has proven to be very useful.
+My C programming skills are to be classified as 'basic' and I welcome any improvement
+that may arise. Also keep in mind that English is not my native language.
+
+I hope that the tool presented here can help others to improve their product, the repeat
+mode is specially useful to spot random and unexpected changes in presented data values 
+caused by programming errors in the field device code or race conditions in the processing
+of the data.
+
+The documentation is not yet complete. My wish is that it is useful to others and that
+the licencing rules will be respected. I hope that contributions from the community may
+lead to improvements.
+
+Be sure to use a Hart(r) compliant modem, Some USB serial dongles have issues.
+
+I had very good results with 3 instances of 'master', one running as primary master, one
+running as secundary master and one as burst mode monitor. (/dev/ttyUSB0, /dev/ttyUSB1 and /dev/ttyUSB4)
+Check that your kernel supports enough serial ports by default.
+
+BUILD:
+
+At some linux distros I had to include -ltinfo, in others not.
+lbmysqlclient-dev and  libncurses5-dev   should be installed 
+
+Perl-Tk:
+
+with cpan install Tk and the missing functions
+
+
+***  Hart is a registered trademark of the HART Communication Foundation ***
+ 
+
