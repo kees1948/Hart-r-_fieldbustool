@@ -1,0 +1,11 @@
+
+*** corrections for master build (2015-07-20)
+
+Modified Hart.h, ProcessFrames.c, Main.c and the Makefile to control the build 
+from the Makefile. Before it still tried to link with libmysqlclient, even when you
+attempted to build the tablefile version only.
+
+Furthermore I changed hmt_config to be a tablefile vesion only, commented out the
+database references by default.
+
+
