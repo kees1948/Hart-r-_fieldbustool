@@ -1,4 +1,4 @@
-Run 'make' to build to tool. It runs as a few threads, one for receive, one for trasnmit and one for timers.
+Run 'make' to build to tool. It runs as a few threads, one for receive, one for transmit and one for timers.
 
 <pre>
 Command line options:
