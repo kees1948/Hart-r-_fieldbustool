@@ -1,0 +1,185 @@
+#!/usr/bin/perl 
+## -w
+
+#-------------------------------------------------------------------------------------
+# script_example1, demonstrate scripting with 'hartcmdline'
+#
+# prerequisites
+# the PATH should allow access to:
+#
+#-------------------------------------------------------------------------------------
+
+#---------------------------------------------------------------------
+# what PERL functions/scripts to include
+#
+use			File::Basename;
+use 		Cwd;
+use			Getopt::Std;
+use    		Time::HiRes "usleep";
+no strict 	'refs';
+#---------------------------------------------------------------------
+
+#---------------------------------------------------------------------
+#
+# init variables which are to be set from config file
+# test1.conf 
+#
+$hexname = "";
+$environment1 = "";
+
+#---------------------------------------------------------------------
+#
+# init other global variables
+#
+
+$retval= 0;
+$cmdline = "";
+$hartrequest = "";
+$hartresponse = "";
+
+#
+#======================================================================================
+#
+$opt_U = 0;			# it is an USB port
+$opt_H = "";		# specify port number
+#
+# process the commandline options
+#
+	$result = getopts("H:U");
+
+#==============================================================================
+#
+#
+#	Program steps starts here
+#
+#
+
+# keep ^C from being seen
+$SIG{'INT'} = 'IGNORE';
+
+#---------------------------------------------------------------------
+#
+# process config file first
+#
+#	&ReadConfig;		# instantiates variables and set their values
+
+# set special environment variables up to environment99 , may be expanded
+	for($i = 1; $i < 99; $i++){
+		$varname = sprintf("environment%d", $i);
+		if(defined($$varname)){
+			($envvar, $envval)=split(/=/,$$varname);
+			$ENV{"$envvar"} = $envval;
+		}
+	}
+
+#---------------------------------------------------------------------
+
+# search device
+	$hartrequest = sprintf "-U -H $opt_H";
+	$hartresponse = &HartMessage($hartrequest);
+	if($retval != 0)
+	{
+		print "Can't find device\n";
+		exit -1;
+	}
+	@bytes = split(/,/,$hartresponse);
+	printf "Found: %04x-%08d\n", hex("$bytes[5]$bytes[6]"), hex("$bytes[13]$bytes[14]$bytes[15]");
+# remember config changed count
+	$cfgchng = $bytes[18].",".$bytes[19];
+	usleep(50000);
+
+# read calculated checksum cmd 238 (application specific)
+	$hartrequest = sprintf "-U -H $opt_H -D ee,00";
+	$hartresponse = &HartMessage($hartrequest);
+    if($retval != 0)
+    {
+        print "Error during cmd 238\n";
+        exit -1;
+    }
+    @bytes = split(/,/,$hartresponse);	
+	usleep(50000);
+
+# write checknumber with cmd 239 (application specific, does not affect config changed)
+	$hartrequest = sprintf "-U -H $opt_H -D ef,02,$bytes[4],$bytes[5]";
+	&HartMessage($hartrequest);
+    if($retval != 0)
+    {
+        print "Error during cmd 239\n";
+        exit -1;
+    }
+	usleep(50000);
+
+# read calculated checksum cmd 238 again (application specific)
+    $hartrequest = sprintf "-U -H $opt_H -D ee,00";
+    $hartresponse = &HartMessage($hartrequest);
+    if($retval != 0)
+    {
+        print "Error during cmd 238\n";
+        exit -1;
+    }
+    @bytes = split(/,/,$hartresponse);  
+	if(($bytes[4] != $bytes[6]) || ($bytes[5] != $bytes[7]))
+	{
+        print "Error checksums don't match n cmd 238\n";
+		exit -1;
+	}
+	usleep(50000);
+
+# reset config changed flag
+	$hartrequest = sprintf "-U -H $opt_H -D 26,02,%s ", $cfgchng;
+	&HartMessage($hartrequest);
+    if($retval != 0)
+    {
+        print "Error resetting cfgchng \n";
+        exit -1;
+    }
+
+
+	print "Done!\n";
+
+
+
+#---------------------------------------------------------------------
+# this nifty function reads the .conf file and INSTANTIATES perl 
+# variables with names from the .conf file with their values
+#
+sub ReadConfig{
+
+	my $pathname = getcwd();
+	my $dirname=basename(__FILE__);
+	$pathname = $ENV{HOME}."/$dirname.conf";
+print $pathname;
+	open (CONFIG, "<$pathname") || die "harttooldb: Can't read config file\n";
+
+	while(<CONFIG>){
+		chomp;                  # no newline
+		s/#.*//;                # no comments
+		s/^\s+//;               # no leading white
+		s/\s+$//;               # no trailing white
+		next unless length;     # empty line?
+		my ($var, $value) = split(/\s*=\s*/, $_, 2);
+		$$var = $value;		# create $var with value from config
+	} 
+	close CONFIG;
+	$logoname = $ENV{HOME}."Fluidwell_logo_200_100.jpg";
+}
+
+#---------------------------------------------------------------------
+#
+# use 'hartcmdline' as native communication tool
+# hartcmdline returns data part of response, cmd, bc, s1,s2,d0, d1 etc
+#
+
+sub	HartMessage()
+{
+	my $cmdline = "hartcmdline -v ".$_[0];
+	my $line;
+
+			$retval = 0;
+            open(HCMD, "$cmdline |") || die $!;
+            $line = <HCMD>;                             # one line only
+            close(HCMD);
+			$retval = $?;
+	return $line;
+}
+
