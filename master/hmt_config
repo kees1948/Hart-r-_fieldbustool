@@ -1,0 +1,26 @@
+#
+# format:
+#	<variable>  =  <value>  
+# whitespace is essential!
+# should be saved as  '.hmt_config'   !!
+#
+db_hostname		=	db01.local
+
+db_name			=	fw-harttool
+
+db_username		=	hart_tool
+
+db_password		=	hart_tool
+
+db_table		=	hart_tool
+
+HartPortName	=	/dev/ttyUSB0
+
+udp_hostname	=	localhost
+udp_portnum		=	5094
+#
+# if no database available i.e. RaspberryPi
+# use table with format specs. db_* fields may be
+# commented out. (Use -T option).  
+#
+tf_tables		=	hmt_tablefile
