@@ -1,0 +1,72 @@
+Hello
+
+This is the second release of my toolset. (2015-06-22)
+
+All is released under GPL V3 or later. Please leave the Copyright info intact.
+
+hart_master: 
+
+master,
+
+replaced usleep() by nanosleep(), as the latter seems to perform better 
+
+can now be build _without_ the MySQL database requirement, 
+instead it can use a table-file with the request/response frame definitions.
+This can be advantageous for stand-alone applications i.e. Raspberyy Pi.
+
+Build options are (Hart.h): 
+* with database AND table option, 
+* with database only
+* with table option only.
+
+hmt_config, 
+
+should be renamed/copied to .hmt_config, preferably in the user home
+directory. Fill in the items or comment them out with '#' at the first
+position in the line. 
+
+test_tools:
+
+usleep_test, test the performance of usleep() and nanosleep() on the platform
+I had a kernel once where the timing was off by factor 4......
+
+hartcmdline, scripting helper. See Script_Example1 (Perl) 
+
+harttestframe, test scripting helper. See DLL011.pl and DLL013.pl. 
+needs an accurate control of the modem, use RS232 type modem with /dev/ttyS? 
+or with /dev/ttyUSB? type ports. Be in for surprises on how some USB<->Serial
+dongles may fool you. A device as the USB Viator is unsuitable here.
+Note that the DLL011.pl and DLL013.pl script wait for a CR from the keyboard
+before the next testcycle is executed...
+
+database tools:
+
+harttooldb, simple Perl tool to maintain the MySQL database. 
+the -U option allows you to maintain the Universal/Common Practice commands.
+the -S option will retain some fields in harttooldb to be re-used for the
+next operation instead of erasing them.
+
+hartsql2table.pl, Perl tool to convert an exported MySQL database into 
+a tablefile (hmt_tablefile)
+
+hmt_table, simple text table. Take care to maintain the proper format.
+BEWARE! For device specific commands it is important to have the correct
+value in the device type field! Otherwise master may not be able to 
+handle the commands correctly. 
+For command-commands create an entry with req and rsp at 0 but with a size at 1.
+
+Hart.sql, example of exported MySQL database, here with Universal and some
+Common Practice commands. If you wan to use a MySQL database, Hart.sql can
+be used for import.
+
+General:
+
+Most of the tools use usleep() or nanosleep() for their timing, therefore
+it is important that these functions  work accurate.
+
+Perl: I use a couple of Perl modules that you may need to add with 'cpan'.
+
+for questions and suggestions: kslinux@gmail.com
+
+
+>>>[ ***  Hart is a registered trademark of the HART Communication Foundation *** ]<<<
