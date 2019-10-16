@@ -1,0 +1,780 @@
+#!/usr/bin/perl 
+## -w
+
+#
+# 
+# This program is released under GNU Public License Version 3 or later.
+# see gpl.txt for the full licence text or www.gnu.org/licences/#GPL
+#
+# Copyright 2010-2013   CWP Schoenmakers  kslinux@gmail.com
+# 
+# This software is provided AS IS without any warranty. It is for 
+# field-device development purposes only and should NOT be used as an
+# official Hart(r) master application in production environments.
+# 
+
+#-------------------------------------------------------------------------------------
+# harttooldb, maintain the database with the request/response layouts
+#
+#
+#
+#
+#-------------------------------------------------------------------------------------
+
+
+#---------------------------------------------------------------------
+# what PERL functions/scripts to include
+#
+use 		Tk;
+require 	Tk::ROText;
+require 	Tk::Dialog;
+require 	Tk::LabEntry;
+use			Tk::Frame;
+use     	Tk::StayOnTop;
+use			Tk::widgets qw/JPEG PNG/;
+use 		Tk ':eventtypes';
+use			File::Basename;
+use 		Cwd;
+use			DBI;
+use			Getopt::Std;
+no strict 	'refs';
+#---------------------------------------------------------------------
+
+#---------------------------------------------------------------------
+#
+# init variables which are to be set from config file
+# test1.conf 
+#
+$dbhost = "";
+$dbuser = "";
+$dbpasswd = "";
+$dbname	= "";
+$dbtable = "";
+$hexname = "";
+$environment1 = "";
+$mysqldebug = 0;
+
+#---------------------------------------------------------------------
+#
+# init other global variables
+#
+
+$retval= 0;
+$logoname =  "";
+$logoimage ;
+$programmodus = 'Read';
+$password = "";
+$modus = "";
+$alertmessage = "_";
+$alertmessage2 = "_";
+$popupstatus;
+#
+$a_devtype = "0000";
+$h_devtype = "";
+$h_commandno = 128;
+$h_requestparm = 0; 
+$h_responseparm = 0; 
+$h_transaction = 0;
+$h_parmsize = ""; 
+$h_parmtype = "";
+$h_relx = ""; 
+$h_rely = ""; 
+$h_title = ""; 
+$oldrequest = 0;
+$oldresponse = 0;
+
+# assosiative table
+# MYSQL record fields, do NOT change unless DATABASE CHANGE
+#$h_devtype = 0;
+#$h_commandno = 1;
+#$h_requestparm = 2;
+#$h_responseparm = 3;
+#$h_parmsize = 4;
+#$h_parmtype = 5;
+#$h_relx = 6;
+#$h_title = 7;
+#$h_rely = 8;
+
+#
+#======================================================================================
+#
+$opt_s = 0;
+$opt_u = 0;
+$opt_U = 0;
+#
+# process the commandline options
+#
+	$result = getopts('suU');
+
+	if($opt_u == 0){
+		$maintitle = "hart device data base tool in transmitter specifific mode";
+	} else {
+		$maintitle = "hart device data base tool in universal/common practice mode";
+	}
+
+#
+# create main window and set size and layout and places of widgets
+#
+	my $mw=MainWindow->new(-title => $maintitle, -bg => 'steelblue');
+	my $hpos = int(($mw->screenwidth / 2) -512);
+	my $vpos = int(($mw->screenheight / 2) - 384);
+	$mw->geometry("820x600+$hpos+$vpos");
+#
+# master frame with all the fields
+#
+	$df_frame = $mw->Frame(-relief => 'groove', -borderwidth =>1, -width => 800, -height => 400)->place(-x => 10, -y => 180);
+
+# frame for 'DevType'
+	$inp_devt_fr = $df_frame->Frame()->place(-relx => 0.01, -rely => 0.02); 
+# 'Command'
+	$inp_cmd_fr = $df_frame->Frame()->place(-relx => 0.21, -rely => 0.02);
+# 'Transaction'
+	$inp_tra_fr = $df_frame->Frame()->place(-relx => 0.42, -rely => 0.02);
+# 'RQParm'
+	$inp_rqp_fr = $df_frame->Frame()->place(-relx => 0.63, -rely => 0.02);
+# 'RSParm'
+	$inp_rsp_fr = $df_frame->Frame()->place(-relx => 0.82, -rely => 0.02);
+# 'ParmSize'
+	$inp_prmo_fr = $df_frame->Frame()->place(-relx => 0.00, -rely => 0.22);
+# 'ParmType'
+	$inp_prmt_fr = $df_frame->Frame()->place(-relx => 0.26, -rely => 0.22); 
+# 'relx'
+	$inp_relx_fr = $df_frame->Frame()->place(-relx => 0.40, -rely => 0.22);
+# 'rely'
+	$inp_rely_fr = $df_frame->Frame()->place(-relx => 0.54, -rely => 0.22);
+# 'Title name'
+	$inp_ttl_fr = $df_frame->Frame()->place(-relx => 0.72, -rely => 0.22);
+
+#
+#-----------------------------------------------------------------------------------
+# device type (KEY)
+	$lbl_devt = $inp_devt_fr->Label(
+			-text => "DeviceType (hex)", 
+			-bg => '#cc7f7f',
+			-width => 15 
+		)->pack(-side => 'left',  -anchor => 'n');
+	$inp_devt = $inp_devt_fr->LabEntry(
+			-textvariable => \$a_devtype, 
+			-width => 5, 
+			-bg => 'lightyellow',
+			-validate => 'all',
+			-validatecommand => sub {$_[1]	=~ /[A-F0-9]/i}
+		)->pack(-side => 'left', -anchor => 'n');
+
+#-------------------------------------------------------------------------------------
+# command (KEY)
+	$lbl_cmd = $inp_cmd_fr->Label(
+			-text => "Command", 
+			-bg => '#cc7f7f',
+			-width => 15 
+		)->pack(-side => 'left',  -anchor => 'n');
+	$inp_cmd = $inp_cmd_fr->LabEntry(
+			-textvariable => \$h_commandno, 
+			-width => 6, 
+			-validate => 'key',
+			-validatecommand => \&emptydata,
+			-bg => 'lightyellow'
+		)->pack(-side => 'left', -anchor => 'n');
+
+#-------------------------------------------------------------------------------------
+# Transaction (KEY)
+	$lbl_tra = $inp_tra_fr->Label(
+			-text => "Transaction", 
+			-bg => '#cc7f7f',
+			-width => 15 
+		)->pack(-side => 'left',  -anchor => 'n');
+	$inp_tra = $inp_tra_fr->LabEntry(
+			-textvariable => \$h_transaction, 
+			-width => 6, 
+			-validate => 'key',
+			-validatecommand => \&emptydata,
+			-bg => 'lightyellow'
+		)->pack(-side => 'left', -anchor => 'n');
+
+#-------------------------------------------------------------------------------------
+# requestparm
+	$lbl_rqp = $inp_rqp_fr->Label(
+			-text => "Request Parm #", 
+			-bg => '#cc7f7f',
+			-width => 15 
+		)->pack(-side => 'left',  -anchor => 'n');
+	$inp_rqp = $inp_rqp_fr->LabEntry(
+			-textvariable => \$h_requestparm, 
+			-width => 3, 
+			-validate => 'focus',
+			-validatecommand => \&requesthelp,
+			-bg => 'lightyellow'
+		)->pack(-side => 'left', -anchor => 'n');
+
+#-------------------------------------------------------------------------------------
+# respsonseparm
+	$lbl_rsp = $inp_rsp_fr->Label(
+			-text => "Response Parm #", 
+			-bg => '#cc7f7f',
+			-width => 15 
+		)->pack(-side => 'left',  -anchor => 'n');
+	$inp_rsp = $inp_rsp_fr->LabEntry(
+			-textvariable => \$h_responseparm, 
+			-width => 3, 
+			-validate => 'focus',
+			-validatecommand => \&responsehelp,
+			-bg => 'lightyellow'
+		)->pack(-side => 'left', -anchor => 'n');
+
+#-------------------------------------------------------------------------------------
+# parm size
+	$lbl_prmo = $inp_prmo_fr->Label(
+			-text => "Size of Parm", 
+			-width => 16 
+		)->pack(-side => 'left',  -anchor => 'n');
+	$inp_prmo = $inp_prmo_fr->LabEntry(
+			-textvariable => \$h_parmsize, 
+			-width => 4, 
+			-validate => 'focusin',
+			-validatecommand => \&parmsizehelp,
+			-bg => 'lightyellow'
+		)->pack(-side => 'left', -anchor => 'n');
+
+#-------------------------------------------------------------------------------------
+# parmtype
+	$lbl_prmt = $inp_prmt_fr->Label(
+			-text => "Parm Type", 
+			-width => 12 
+		)->pack(-side => 'left',  -anchor => 'n');
+	$inp_prmt = $inp_prmt_fr->LabEntry(
+			-textvariable => \$h_parmtype, 
+			-bg => 'lightyellow',
+			-validate => 'focusin',
+			-validatecommand => \&parmtypehelp,
+			-width => 1
+		)->pack(-side => 'left', -anchor => 'n');
+
+#-------------------------------------------------------------------------------------
+# prel X pos
+	$lbl_relx = $inp_relx_fr->Label(
+			-text => "Rel. X pos", 
+			-width => 12 
+		)->pack(-side => 'left',  -anchor => 'n');
+	$inp_relx = $inp_relx_fr->LabEntry(
+			-textvariable => \$h_relx, 
+			-bg => 'lightyellow',
+			-validate => 'focusin',
+			-validatecommand => \&xposhelp,
+			-width => 3
+		)->pack(-side => 'left', -anchor => 'n');
+
+#-------------------------------------------------------------------------------------
+# prel Y pos
+	$lbl_rely = $inp_rely_fr->Label(
+			-text => "Rel. Y pos", 
+			-width => 12 
+		)->pack(-side => 'left',  -anchor => 'n');
+	$inp_rely = $inp_rely_fr->LabEntry(
+			-textvariable => \$h_rely, 
+			-bg => 'lightyellow',
+			-validate => 'focusin',
+			-validatecommand => \&yposhelp,
+			-width => 3
+		)->pack(-side => 'left', -anchor => 'n');
+
+#-------------------------------------------------------------------------------------
+# title
+	$lbl_ttl = $inp_ttl_fr->Label(
+			-text => "Title", 
+			-width => 6 
+		)->pack(-side => 'left',  -anchor => 'n');
+	$inp_ttl = $inp_ttl_fr->LabEntry(
+			-textvariable => \$h_title, 
+			-bg => 'lightyellow',
+			-width => 17
+		)->pack(-side => 'left', -anchor => 'n');
+
+#-------------------------------------------------------------------------------------
+# all the buttons in one row
+#
+
+	$inp_cmd_fr = $mw->Frame(
+			-relief => 'groove', 
+			-borderwidth => 1)->
+		place(-relx => 0.05, -rely => 0.82);
+
+	$inp_find = $inp_cmd_fr->Button(
+			-width => 10,
+			-text	=> 'Find',
+			-command => \&findrecord,
+						)->pack(-padx => 22, -side => 'left', -anchor => 'w');
+	$inp_amend = $inp_cmd_fr->Button(
+			-width => 10,
+			-text	=> 'Amend',
+			-command => \&amendrecord,
+
+						)->pack(-padx => 22, -side => 'left', -anchor => 'w');
+	$inp_insert = $inp_cmd_fr->Button(
+			-width => 10,
+			-text	=> 'Insert',
+			-command => \&insertrecord,
+
+						)->pack(-padx => 22, -side => 'left', -anchor => 'w');
+	$inp_delete = $inp_cmd_fr->Button(
+			-width => 10,
+			-text	=> 'Delete',
+			-command => \&deleterecord,
+						
+						)->pack(-padx => 22, -side => 'left', -anchor => 'w');
+	$inp_quit = $inp_cmd_fr->Button(
+			-width => 10,
+			-text	=> 'Quit',
+			-command => \&goexit,
+		
+						)->pack(-padx => 22, -side => 'left', -anchor => 'w');
+
+#-------------------------------------------------------------------------------------
+# alertmessage
+	$msg_fr = $mw->Frame(
+			-relief => 'sunken', 
+			-borderwidth => 1,
+			-height => 2,
+		)->place(-relx => 0.05, -rely => 0.62);
+	$lbl_msg1 = $msg_fr->Label(
+			-textvariable => \$alertmessage, 
+			-font => "courier 10 bold", 
+			-width => 90,
+		)->pack(-side => 'top', -anchor => 'w');
+	$lbl_msg2 = $msg_fr->Label(
+			-textvariable => \$alertmessage2, 
+			-font => "courier 10 bold", 
+			-width => 84,
+		)->pack(-side => 'bottom', -anchor => 'w');
+
+#==============================================================================
+#
+#
+#	Program steps starts here
+#
+#
+
+# keep ^C from being seen
+$SIG{'INT'} = 'IGNORE';
+
+#---------------------------------------------------------------------
+#
+# process config file first
+#
+	&ReadConfig;		# instantiates variables and set their values
+
+# set special environment variables up to environment99 , may be expanded
+	for($i = 1; $i < 99; $i++){
+		$varname = sprintf("environment%d", $i);
+		if(defined($$varname)){
+			($envvar, $envval)=split(/=/,$$varname);
+			$ENV{"$envvar"} = $envval;
+		}
+	}
+
+
+#---------------------------------------------------------------------
+#
+# check connection to database
+#
+	$dbh_sw = DBI->connect (
+                        "DBI:mysql:$dbname:$dbhost", 
+                        $dbuser, $dbpasswd, 
+                        {RaiseError => $mysqldebug, PrintError => $mysqldebug});
+	$dbh_sw->{LongReadLen} = 512 * 1024;		# 512 K
+	$dbh_sw->{LongTruncOk} = 1;					# we allow to truncate anything over
+
+#---------------------------------------------------------------------
+	if($opt_u != 0){
+		$a_devtype = "0000";
+		$h_commandno = 0;
+		if($opt_U == 0){
+			$inp_devt->configure(-state  => 'disabled');
+		}
+	} else {
+		$inp_devt->configure(-state  => 'normal');
+		$h_commandno = 128;
+		$a_devtype = "FFFF";
+	}
+
+#===============================================================================
+#
+# MAINLOOP
+#
+	MainLoop();
+
+#---------------------------------------------------------------------
+# this nifty function reads the .conf file and INSTANTIATES perl 
+# variables with names from the .conf file with their values
+#
+sub ReadConfig{
+
+	my $pathname = getcwd();
+	my $dirname=basename(__FILE__);
+	$pathname = $ENV{HOME}."/$dirname.conf";
+#print $pathname;
+	open (CONFIG, "<$pathname") || die "harttooldb: Can't read config file\n";
+
+	while(<CONFIG>){
+		chomp;                  # no newline
+		s/#.*//;                # no comments
+		s/^\s+//;               # no leading white
+		s/\s+$//;               # no trailing white
+		next unless length;     # empty line?
+		my ($var, $value) = split(/\s*=\s*/, $_, 2);
+		$$var = $value;		# create $var with value from config
+	} 
+	close CONFIG;
+	$logoname = $ENV{HOME}."/logo.jpg"; # put logo name here
+#
+# frame with logo
+#
+print $logoname;
+    $logoimage = $mw->Photo(-file => $logoname);
+    $logo = $mw->Label(
+        -image => $logoimage,
+#		-height => 100,
+#        -width => 200,
+        )->place(-x => 10, -y => 10);
+}
+
+#---------------------------------------------------------------------
+#
+sub cleanup{
+	exit;
+}
+
+#-----------------------------------------------------------------
+sub emptydata{
+	$alermessage = "";
+	if($opt_s == 0){
+		$h_parmsize = 0 ;
+		$h_parmtype = "";
+		$h_relx = 0 ;
+		$h_rely = 0 ;
+		$h_title = ""; 
+	}
+	$alertmessage2="";
+	return(1);
+}
+
+#---------------------------------------------------------------------
+# find record
+sub findrecord{
+	
+	my	$sth;
+	my	$retval;
+	my	$hashref;
+	my	$key;
+	my	$hexdevtype;	
+
+	if(&check_key_fields){
+		return;
+	}
+
+	$sth = $dbh_sw->prepare(qq{SELECT * FROM $dbtable WHERE h_devtype="$h_devtype" AND h_commandno="$h_commandno" AND h_requestparm="$h_requestparm" AND h_responseparm="$h_responseparm" AND h_transaction="$h_transaction"});
+	$retval = $sth->execute();
+	$retval = $retval * 1;
+	if($retval == 0){
+		$alertmessage2 = "Error, command failed :  Not Found";
+#		&emptyfields;	
+		return (1);
+	}		
+# fill in the fields
+	while($hashref = $sth->fetchrow_hashref()) {
+		foreach $key (keys(%{$hashref}	)) {
+			$$key = $hashref->{$key};
+		}
+	}
+	$sth->finish();
+	$a_devtype = sprintf("%04x", $h_devtype);
+	$ostatus = $h_requestparm;
+	$orevision = $h_responseparm;
+	return(0);
+}
+
+#-------------------------------------------------------------------------
+sub insertrecord{
+
+	my $sth;
+	my $ref;
+	my $query;
+# check for valid key fields
+	if(&check_key_fields){
+		return;
+	}
+#	if(&checkdata){
+#		return;
+#	}
+	if($opt_u == 0){
+		if(($h_devtype * 1.0) < 10){
+			$alertmessage2 = "***  invalid devtype , cannot proceed";
+			return(1);
+		}
+	}	
+# build query
+	$sth = $dbh_sw->prepare(qq{
+		INSERT INTO 
+			$dbtable 
+			(
+			h_devtype, h_commandno, h_requestparm , h_responseparm, h_parmsize, h_parmtype,
+			h_relx, h_title , h_rely, h_transaction
+			) VALUES 
+			(
+			"$h_devtype", "$h_commandno", "$h_requestparm", "$h_responseparm", "$h_parmsize", "$h_parmtype",
+			"$h_relx", "$h_title" , "$h_rely", "$h_transaction"
+			)
+		 });
+	$sth->execute();
+	$alertmessage2 = $sth->errstr();
+	$sth->finish();
+	$a_devtype = sprintf("%04x", $h_devtype);
+##	&emptyfields;
+	return(0);
+}
+	
+#-----------------------------------------------------------------------------
+# amend record
+sub amendrecord{
+
+	my $sth;
+	my $ref;
+	my $query;
+	my $retval;
+# check valid keyfields
+	if(&check_key_fields){
+		return;
+	}
+	if(&checkdata){
+		return;
+	}
+	if($opt_u == 0){
+		if(($h_devtype * 1.0) < 10){
+			$alertmessage2 = "***  invalid devtype , cannot proceed";
+			return(1);
+		}
+	}	
+	$retval = &askuser("0");
+	if($retval){
+		return;
+	}
+# build query
+	$sth = $dbh_sw->prepare(qq{
+		SELECT h_devtype,h_commandno FROM $dbtable WHERE h_devtype="$h_devtype" AND h_commandno="$h_commandno" AND h_requestparm="$h_requestparm" AND h_responseparm="$h_responseparm" AND h_transaction="$h_transaction"});
+	$sth->execute();
+	$retval = $sth->err() * 1;
+	$sth->finish();
+#
+# error return? check for duplicate
+# because of problems with UPDATE a field with binary data
+# we delete the record and re-inert it
+# but remain the original date
+#
+	if($retval != 1){
+# exists, update data fields
+		$query = sprintf(qq{DELETE FROM $dbtable WHERE h_devtype="$h_devtype" AND h_commandno="$h_commandno" AND h_requestparm="$h_requestparm" AND h_responseparm="$h_responseparm" AND h_transaction="$h_transaction"});
+
+		$sth = $dbh_sw->prepare($query);
+		$sth->execute();
+# else it is new because key fields has changed
+	}
+	$sth->finish();
+# (re)insert the record
+	$sth = $dbh_sw->prepare(qq{
+		INSERT INTO 
+			$dbtable 
+			(
+			h_devtype, h_commandno, h_requestparm , h_responseparm, h_parmsize, h_parmtype,
+			h_relx, h_title, h_rely, h_transaction
+			) VALUES 
+			(
+			"$h_devtype", "$h_commandno", "$h_requestparm", "$h_responseparm", "$h_parmsize", "$h_parmtype",
+			"$h_relx", "$h_title", "$h_rely", "$h_transaction"
+			)
+		 });
+	$sth->execute();
+	$alertmessage2 = $sth->errstr();
+	$sth->finish();
+	$a_devtype = sprintf("%04x", $h_devtype);
+##	&emptyfields;
+	return(0);
+}
+
+#---------------------------------------------------------------------------------------------
+sub deleterecord{
+
+	my $retval;
+	my $sth;
+# check valid keyfields
+	if(&check_key_fields){
+		return;
+	}
+	if($opt_u == 0){
+		if(($h_devtype * 1.0) < 10){
+			$alertmessage2 = "***  invalid devtype , cannot proceed";
+			return(1);
+		}
+	}	
+#
+	$retval = &askuser("0");
+	if($retval){
+		return;
+	}
+	$sth = $dbh_sw->prepare(qq{DELETE from $dbtable WHERE h_devtype="$h_devtype" AND h_commandno="$h_commandno" AND h_requestparm="$h_requestparm" AND h_responseparm="$h_responseparm" AND h_transaction="$h_transaction"});
+	$retval = $sth->execute();
+	if($retval == "0E0"){
+		$alertmessage2 = "Error, delete command failed ";
+		return (1);
+	}		
+	$sth->finish();
+	$a_devtype = sprintf("%04x", $h_devtype);
+	&emptyfields;
+	return(0);
+}
+
+#---------------------------------------------------------------------------------
+# at least keys should be filled
+#
+sub check_key_fields{
+
+	$alertmessage2 ="";
+	$h_parmtype =~ tr/[a-z]/[A-Z]/;
+	$a_devtype =~ s/\s+//g;		# remove any whitespace from fields
+	$h_devtype = hex($a_devtype);
+	$h_commandno 	=~ s/\s+//g;
+	$h_transaction 	=~ s/\s+//g;
+	if((!length ($h_devtype)) || (!length($h_commandno))){
+		$alertmessage2 = "***  KEY fields are empty, cannot proceed";
+		return(1);
+	}
+	return(0);
+}
+
+#-----------------------------------------------------------------
+#
+#
+sub checkdata{
+
+	if(($h_parmsize == 0) && ($h_devtype)){
+		$alertmessage2 = "***  Size and Types are empty, cannot proceed";
+		return(1);
+	}
+	return(0);
+}
+
+#-----------------------------------------------------------------
+# empty all fields
+sub emptyfields{
+	$h_devtype = "";
+	$h_commandno =0;
+	$h_requestparm = 0;
+	$h_responseparm = 0;
+	$h_transaction = 0;
+	$h_parmsize =0;
+	$h_parmtype = "";
+	$h_relx = 0;
+	$h_rely = 0;
+	$h_title = "";
+}
+
+#-----------------------------------------------------------------
+
+sub askuser{
+	my $response = "";
+	if($_[0] == 0){
+		$response = $mw->Dialog(-title => 'Select with mouse!!',
+								-text=>'Are you sure?',
+								-buttons=> [ 'Yes', 'No' ],
+								-default_button => 'Yes',
+								-width => 24,
+								-bitmap=>'question')->Show();
+	} else {
+		$response = $mw->Dialog(-title => 'Select with mouse!!',
+								-text=>'Are you sure?',
+								-buttons=> [ 'Yes', 'No' ],
+								-default_button => 'No',
+								-width => 24,
+								-bitmap=>'question')->Show();
+	}
+	if($response eq "Yes"){
+		return(0);
+	} else {
+		return(1);
+	}
+}
+
+#-----------------------------------------------------------------
+sub	goexit{
+	my $retval;
+	$retval = &askuser("1");
+	if($retval){
+		return(0);
+	}else{
+		exit;
+	}
+}
+
+#-----------------------------------------------------------------
+sub parmsizehelp{
+	$alertmessage2 = "size (in bytes) of parameter in frame";
+	return(1);
+}
+
+#-----------------------------------------------------------------
+sub parmtypehelp{
+	if($h_requestparm == 0){
+		$alertmessage2 = "U integer, P packed, A ascii, F float, X hexadecimal, D date, L long3";
+	} else {
+		$alertmessage2 = "U integer, P packed, A ascii, F float, X hexadecimal, D date, L long3, C relx=value";
+	}
+	return(1);
+}
+
+#-----------------------------------------------------------------
+sub requesthelp{
+	if(($opt_s == 0) && ($h_requestparm != $oldrequest)){
+		$h_parmsize = 0 ;
+		$h_parmtype = "";
+		$h_relx = 0 ;
+		$h_rely = 0 ;
+		$h_title = ""; 
+	}
+	if($h_requestparm != 0){
+		$h_responseparm = 0;
+	}
+	$oldrequest = $h_requestparm;
+	$alertmessage2 = "";
+	return(1);
+}
+
+#-----------------------------------------------------------------
+sub responsehelp{
+	if(($opt_s == 0) && ($h_responseparm != $oldresponse)){
+		$h_parmsize = 0 ;
+		$h_parmtype = "";
+		$h_relx = 0 ;
+		$h_rely = 0 ;
+		$h_title = ""; 
+	}
+	if($h_responseparm != 0){
+		$h_requestparm = 0;
+	}
+	$oldresponse = $h_responseparm;
+	$alertmessage2 = "";
+	return(1);
+}
+
+#-----------------------------------------------------------------
+sub xposhelp{
+	$alertmessage2 = "";
+
+	return(1);
+}
+
+#-----------------------------------------------------------------
+sub yposhelp{
+	$alertmessage2 = "";
+
+	return(1);
+}
+
+#-----------------------------------------------------------------
